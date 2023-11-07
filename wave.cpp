@@ -5,7 +5,7 @@
 #include <iostream>
 #include <stdio.h>
 
-const double T = 100, H = 100; // calculation time, size of calculation area
+const double T = 100, H = 15; // calculation time, size of calculation area
 const double tau = 0.01, h = 0.1; // step by time and grid.
 const double v = 0.1;
 const int N_grid_cells = static_cast<int>(H / h);
