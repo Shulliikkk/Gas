@@ -1,45 +1,96 @@
-
-/* solving the transfer equation du / dt + gamma * du / dx = 0, where 'd' == '\partitial' */
-#include <cmath>
-#include <fstream>
 #include <iostream>
-#include <stdio.h>
+#include <fstream>
+#include <cmath>
 
-const double T = 100, H = 15; // calculation time, size of calculation area
-const double tau = 0.01, h = 0.1; // step by time and grid.
-const double v = 0.1;
-const int N_grid_cells = static_cast<int>(H / h);
-const int step = 100;
+const int step = 10;
 
-double u_init(int k) {
-  const int a = 10;
-  return std::exp(-(k - a) * (k - a));
+const int width = 30;
+const int center = 100;
+const int p_0 = 4;
+
+const int T = 2000, K = 300, P = 11, P_0 = 5;
+const int SIZE = P * K;
+
+int index(int k, int p) {
+  return (p + P_0) * K + k;
+}
+
+double get_gamma(int p) {
+  return p * 1.0 / P;
+}
+
+double initial(int k) {
+  return std::exp(-1.0 * ((k - center) * (k - center) / width / width));
+}
+
+void set_initial_values(double* data) {
+  for (int k = 0; k < K; k++) {
+    data[index(k, p_0)] = initial(k);
+  }
+}
+
+void dump_concentration(double* data, int i) {
+  std::ofstream out;
+  char filename[100];
+  sprintf(filename, "data/data_%d.txt", i);
+  out.open(filename);
+  for (int k = 0; k < K; k++) {
+    double total = 0;
+    for (int p = -P_0; p <= P_0; p++) {
+      total += data[index(k, p)];
+    }
+    out << total << std::endl;
+  }
+  out.close();
+}
+
+void make_iteration(double* next, double* data) {
+  double gamma;
+  for (int p = -P_0; p <= P_0; p++) {
+    gamma = get_gamma(p);
+    if (gamma > 0) {
+      for (int k = 1; k < K; k++) {
+        next[index(k, p)] = data[index(k, p)] - gamma * (data[index(k, p)] - data[index(k - 1, p)]);
+      }
+    }
+    else {
+      for (int k = 0; k < K - 1; k++) {
+        next[index(k, p)] = data[index(k, p)] - gamma * (data[index(k + 1, p)] - data[index(k, p)]);
+      }
+    }
+  }
+  double nom_left = 0, nom_right, denom = 0;
+  for (int p = -P_0; p <= P_0; p++) {
+    gamma = get_gamma(p);
+    if (gamma > 0) {
+      nom_right += next[index(K - 1, p)] * gamma;
+    }
+    else {
+      nom_left += next[index(0, p)] * gamma;
+    }
+    if (gamma > 0) {
+      denom += gamma * std::exp(-gamma * gamma / 2.0);
+    }
+  }
+  for (int p = -P_0; p <= P_0; p++) {
+    gamma = get_gamma(p);
+    if (gamma > 0) {
+      next[index(0, p)] = -nom_left / denom * std::exp(-gamma * gamma / 2.0);
+    }
+    else {
+      next[index(K - 1, p)] = -nom_right / (-denom) * std::exp(-gamma * gamma / 2.0);
+    }
+  }
 }
 
 int main() {
-  double gamma = v * tau / h;
-  double u_curr[N_grid_cells], u_next[N_grid_cells];
-
-  std::ofstream out;
-  char filename[100];
-
-  for (int k = 0; k * h < H; k++) {
-    u_curr[k] = u_init(k);
-  }
-
-  for(int i = 0; i * tau  < T; i++) {
-    u_next[0] = u_curr[0];
-    for(int k = 0; k * h < H; k++) {
-      u_next[k] = u_curr[k] - gamma * (u_curr[k] - u_curr[k - 1]);
-    }
+  double data[SIZE], next[SIZE];
+  set_initial_values(data);
+  for (int i = 0; i < T; i++) {
+    make_iteration(next, data);
+    std::swap(data, next);
     if (i % step == 0) {
-      sprintf(filename, "data/data_%d.txt", i / step);
-      out.open(filename);
-      for (int k = 0; k * h < H; k++) {
-        out << k * h << ' ' <<  u_curr[k] << std::endl;
-      }
-      out.close();
+      dump_concentration(data, i);
     }
-    std::swap(u_curr, u_next);
   }
 }
